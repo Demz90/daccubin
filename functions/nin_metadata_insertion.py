@@ -82,7 +82,7 @@ def initialise_mongo_cloud_db_client():
 
     # Create the MongoDB connection string
     CONNECTION_STRING = "mongodb://%s:%s@%s:27017/" % (mongodb_server_username, mongodb_server_password, mongo_server_public_ip_address)
-
+    print (CONNECTION_STRING)
     # Establish a connection to the MongoDB server
     client = MongoClient(CONNECTION_STRING)
 
@@ -132,13 +132,20 @@ def get_documents_by_filter_criteria(client, db_name, collection_name, filter_cr
     return list(result)
 
 def generate_nin_input_dict(nin_input_params):
-    import random
-
+    
+    milvus_collection_name = "face_public_keys"
+    face_public_keys_collection = milvus_utils.get_collection(milvus_collection_name)
+    
     image_path = nin_input_params['image_path']
-    current_nin = str(random.randint(1000000000, 9999999999)) # Generate a random NIN for Mongo doc
+    # current_nin = str(random.randint(1000000000, 9999999999)) # Generate a random NIN for Mongo doc
+    current_nin = nin_input_params['nin']
 
     # 1. Generate Base64 string from image
-    image_base_64_string = image_utils.generate_base_64_from_image_path(image_path)
+    if "base64_string" not in nin_input_params:
+        image_base_64_string = image_utils.generate_base_64_from_image_path(image_path)
+    else:
+        image_base_64_string = nin_input_params["base64_string"]
+
     # print(f"Generated Base64 string length: {len(image_base_64_string)}")
 
     # 2. Connect to MongoDB
@@ -173,7 +180,12 @@ def generate_nin_input_dict(nin_input_params):
 
     # 4. Generate face public key for Milvus
     face_public_key = public_key_gen.generate_face_public_key_from_image(image_path)
-    # print(face_public_key)
+    
+    # Find the closest match in Milvus
+    closest_match = milvus_utils.find_closest_face_key(face_public_keys_collection, face_public_key, top_k=3)
+    
+    # reduce the threshould `1` to find exact ffaces, `40` for very similar face
+    duplicate_face = any(match["distance"] < 40 for match in closest_match) 
 
     # 5. Define the data dictionary for Milvus insertion
     nin_input_dict = {
@@ -189,7 +201,8 @@ def generate_nin_input_dict(nin_input_params):
         "nationality": nin_input_params.get("nationality", "USA"),
         "sex": nin_input_params.get("sex", "M"),
         "height": nin_input_params.get("height", "175"),
-        "NIN": current_nin # Use the same NIN as stored in Mongo doc reference
+        "NIN": current_nin, # Use the same NIN as stored in Mongo doc reference
+        "duplicate_face": duplicate_face
     }
 
     return nin_input_dict

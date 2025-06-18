@@ -62,8 +62,8 @@ def create_face_public_keys_collection():
     field_first_name = FieldSchema(name="first_name", dtype=DataType.VARCHAR, max_length=100)
     field_middle_name = FieldSchema(name="middle_name", dtype=DataType.VARCHAR, max_length=100)
     field_surname = FieldSchema(name="surname", dtype=DataType.VARCHAR, max_length=100)
-    field_date_of_birth = FieldSchema(name="date_of_birth", dtype=DataType.VARCHAR, max_length=9)
-    field_issue_date = FieldSchema(name="issue_date", dtype=DataType.VARCHAR, max_length=9)
+    field_date_of_birth = FieldSchema(name="date_of_birth", dtype=DataType.VARCHAR, max_length=10)
+    field_issue_date = FieldSchema(name="issue_date", dtype=DataType.VARCHAR, max_length=10)
     field_nationality = FieldSchema(name="nationality", dtype=DataType.VARCHAR, max_length=3)
     field_sex = FieldSchema(name="sex", dtype=DataType.VARCHAR, max_length=1)
     field_height = FieldSchema(name="height", dtype=DataType.VARCHAR, max_length=5)
@@ -321,3 +321,5 @@ def find_closest_face_key(collection: Collection, query_key_hex: str, top_k: int
 
     return hit_results
 
+if __name__ == "__main__":
+    create_face_public_keys_collection()

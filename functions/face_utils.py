@@ -1,8 +1,6 @@
 import os
 import sys
 
-import os
-import sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 """   
@@ -10,6 +8,11 @@ Face Detector Class
 """
 import cv2
 import numpy as np
+import requests
+from urllib.parse import urlparse
+from io import BytesIO
+from PIL import Image
+
 import os # Still potentially useful if mp stores models locally, although not explicitly managed here
 from typing import Union
 try:
@@ -117,15 +120,15 @@ except ImportError:
 
 def load_and_detect_single_face(
     image_path: str, 
-    mp_confidence: float = 0.5, # Confidence for MediaPipe detector init
-    model_selection: int = 1    # Model selection for MediaPipe detector init
+    mp_confidence: float = 0.5,  # Confidence for MediaPipe detector init
+    model_selection: int = 1     # Model selection for MediaPipe detector init
 ) -> tuple[np.ndarray, tuple[int, int, int, int]]:
     """
-    Loads an image, detects exactly one face using MediaPipeFaceDetector, 
+    Loads an image from a file path or URL, detects exactly one face using MediaPipeFaceDetector,
     and returns the image array and face bounding box.
 
     Args:
-        image_path: Path to the image file.
+        image_path: Path or URL to the image file.
         mp_confidence: Minimum confidence for MediaPipe detector initialization (0-1).
         model_selection: MediaPipe model selection (0 for short-range, 1 for full-range).
 
@@ -135,36 +138,38 @@ def load_and_detect_single_face(
             - The bounding box (x, y, w, h) of the single detected face.
 
     Raises:
-        FileNotFoundError: If the image file does not exist.
-        ValueError: If the loaded file is not a valid image, if no faces are 
-                    detected, or if more than one face is detected.
+        FileNotFoundError: If the local image file does not exist.
+        ValueError: If no valid image is found or invalid image shape.
         ImportError: If the mediapipe library is not installed.
-        RuntimeError: If the MediaPipeFaceDetector fails to initialize or run.
+        RuntimeError: If the detector fails to initialize or detect.
     """
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image file not found at: {image_path}")
+    parsed_url = urlparse(image_path)
 
-    image = cv2.imread(image_path)
+    if parsed_url.scheme in ['http', 'https']:
+        try:
+            response = requests.get(image_path)
+            response.raise_for_status()
+            pil_image = Image.open(BytesIO(response.content)).convert("RGB")
+            image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load image from URL: {e}")
+    else:
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found at: {image_path}")
+        image = cv2.imread(image_path)
+
     print(f"Image shape: {image.shape}")
-        
     if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
-        raise ValueError("Input file must be read as a valid BGR image.")
+        raise ValueError("Input file must be a valid BGR image (3 channels).")
 
     try:
-        # Use the MediaPipe specific detector
-        detector = FaceDetector(
-            mp_confidence=mp_confidence, 
-            model_selection=model_selection
-        )
-    except ImportError: # Propagate import error
-        raise 
-    except RuntimeError as e: # Catch init errors
-        raise RuntimeError(f"Failed to initialize MediaPipeFaceDetector: {e}")
+        detector = FaceDetector(mp_confidence=mp_confidence, model_selection=model_selection)
+    except ImportError:
+        raise
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred during MediaPipeFaceDetector initialization: {e}")
+        raise RuntimeError(f"Failed to initialize MediaPipeFaceDetector: {e}")
 
     try:
-        # Detect faces using the MediaPipe detector
         faces = detector.detect(image)
         print(faces)
     except (ValueError, RuntimeError) as e: # Catch detection errors
@@ -172,16 +177,12 @@ def load_and_detect_single_face(
     except Exception as e:
         raise RuntimeError(f"An unexpected error occurred during face detection: {e}")
 
-
-    # Check the number of detected faces
     if len(faces) == 0:
         raise ValueError(f"No faces detected in the image: {image_path}")
     elif len(faces) > 1:
         raise ValueError(f"Expected 1 face, but found {len(faces)} in image: {image_path}")
-    
-    # Exactly one face found
-    face_bbox = faces[0]
-    return image, face_bbox
+
+    return image, faces[0]
 
 # --- Function 2: Draw Rectangle on Image (Unchanged) ---
 
