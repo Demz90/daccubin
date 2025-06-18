@@ -5,6 +5,8 @@ import numpy as np
 from PIL import Image
 import base64
 import io
+import requests
+from urllib.parse import urlparse
 
 def generate_base_64_from_numpy_array(image_array: np.ndarray, image_format: str = "PNG") -> str:
     """
@@ -57,36 +59,49 @@ def generate_base_64_from_numpy_array(image_array: np.ndarray, image_format: str
 
 def generate_base_64_from_image_path(image_path: str) -> str:
     """
-    Converts an image from a given file path into a Base64 encoded string.
+    Converts an image from a given file path or URL into a Base64 encoded string.
 
     Args:
-        image_path: The file path to the image.
+        image_path: The file path or URL to the image.
 
     Returns:
         A Base64 encoded string representation of the image.
 
     Raises:
-        FileNotFoundError: If the image file does not exist at the given path.
+        FileNotFoundError: If the image file does not exist at the given local path.
         ValueError: If the image format is not supported by PIL.
         Exception: For any other errors during the conversion process.
     """
     try:
-        # Open the image file
-        with Image.open(image_path) as img:
-            buffered = io.BytesIO()
-            # Infer the image format from the image object
-            image_format = img.format
-            img.save(buffered, format=image_format)
-            img_bytes = buffered.getvalue()
-            base64_encoded = base64.b64encode(img_bytes)
-            base64_string = base64_encoded.decode('utf-8')
-            return base64_string
+        # Determine if the input is a URL
+        parsed_url = urlparse(image_path)
+        if parsed_url.scheme in ['http', 'https']:
+            response = requests.get(image_path)
+            response.raise_for_status()
+            img_bytes = io.BytesIO(response.content)
+            with Image.open(img_bytes) as img:
+                buffered = io.BytesIO()
+                img.save(buffered, format=img.format)
+        else:
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found at path: {image_path}")
+            with Image.open(image_path) as img:
+                buffered = io.BytesIO()
+                img.save(buffered, format=img.format)
+        
+        base64_encoded = base64.b64encode(buffered.getvalue())
+        base64_string = base64_encoded.decode('utf-8')
+        return base64_string
+
     except FileNotFoundError:
-        raise FileNotFoundError(f"Image file not found at path: {image_path}")
+        raise
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to download image from URL: {e}")
     except ValueError as e:
         raise ValueError(f"Error processing image with PIL: {e}")
     except Exception as e:
         raise RuntimeError(f"An unexpected error occurred during Base64 generation: {e}")
+
 
 
 def convert_base_64_to_numpy_array(base64_string: str) -> np.ndarray:
