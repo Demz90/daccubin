@@ -8,11 +8,27 @@ import face_embeddings
 import public_key_gen
 import milvus_utils
 import image_utils
+import base64
+import numpy as np
+import cv2
+import tempfile
 from pymongo import MongoClient, ASCENDING, IndexModel
 from bson.objectid import ObjectId
 # Define MongoDB constants
 MONGO_DB_NAME = "theaccubin_images"
 MONGO_COLLECTION_NAME = "image_storage"
+
+def base64_to_cv2_image(base64_string):
+
+    if "," in base64_string:
+        base64_string = base64_string.split(",")[1]
+    
+    img_data = base64.b64decode(base64_string)
+    np_arr = np.frombuffer(img_data, np.uint8)
+    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    
+    return img
+
 
 def drop_image_storage_collection():
     """
@@ -136,15 +152,24 @@ def generate_nin_input_dict(nin_input_params):
     milvus_collection_name = "face_public_keys"
     face_public_keys_collection = milvus_utils.get_collection(milvus_collection_name)
     
-    image_path = nin_input_params['image_path']
     # current_nin = str(random.randint(1000000000, 9999999999)) # Generate a random NIN for Mongo doc
     current_nin = nin_input_params['nin']
 
     # 1. Generate Base64 string from image
     if "base64_string" not in nin_input_params:
+        image_path = nin_input_params['image_path']
         image_base_64_string = image_utils.generate_base_64_from_image_path(image_path)
+        face_public_key = public_key_gen.generate_face_public_key_from_image(image_path)
     else:
         image_base_64_string = nin_input_params["base64_string"]
+        image = base64_to_cv2_image(image_base_64_string)
+
+        # This is a lazy way. you still need to restructure the whole `generate_face_public_key_from_image`
+        # to take in image array
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+            temp_image_path = tmp_file.name
+            cv2.imwrite(temp_image_path, image)
+        face_public_key = public_key_gen.generate_face_public_key_from_image(temp_image_path)
 
     # print(f"Generated Base64 string length: {len(image_base_64_string)}")
 
@@ -177,9 +202,6 @@ def generate_nin_input_dict(nin_input_params):
     if not mongo_id:
          # This case should ideally be unreachable if the exception is raised
          raise ValueError("Failed to obtain MongoDB ID for the image.")
-
-    # 4. Generate face public key for Milvus
-    face_public_key = public_key_gen.generate_face_public_key_from_image(image_path)
     
     # Find the closest match in Milvus
     closest_match = milvus_utils.find_closest_face_key(face_public_keys_collection, face_public_key, top_k=3)
