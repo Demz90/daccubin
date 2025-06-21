@@ -61,8 +61,10 @@ def find_closest_face_key_and_retrieve_data(image_path=None, base64_string=None)
     retrieved_nin_dict = {
         "NIN": retrieved_nin,
         "distance": distance,
-        "input_base_64_string": input_image_base_64_string,
-        "retrieved_base64_string": None
+        "keys_metadata": {
+            "face_public_key": input_image_face_public_key,
+            "face_public_key_vector": str(bytes.fromhex(input_image_face_public_key))
+        }
     }
     
     # If the distance is greater than 50, return a message indicating no user was found
@@ -86,7 +88,7 @@ def find_closest_face_key_and_retrieve_data(image_path=None, base64_string=None)
             mongo_client.close()
     
     # Update the retrieved base64 string in the return dictionary
-    if mongo_doc:
-        retrieved_nin_dict["retrieved_base64_string"] = mongo_doc['base64_string']
+    # if mongo_doc:
+    #     retrieved_nin_dict["retrieved_base64_string"] = mongo_doc['base64_string']
     
     return retrieved_nin_dict

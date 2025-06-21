@@ -11,6 +11,8 @@ import atexit
 from dramatiq.middleware import CurrentMessage
 from dramatiq_functions import dramatiq_utils as dram_utils
 from functions import mongo_utils as mongo
+from dotenv import load_dotenv
+load_dotenv(r"C:\Users\Samuel.Taiwo\Documents\samuCodes\daccubin\.env")
 
 # Setup broker
 broker = dram_utils.setup_dramatiq_broker()
